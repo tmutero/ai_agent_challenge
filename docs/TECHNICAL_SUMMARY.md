@@ -1,189 +1,174 @@
 # AI Agent Technical Challenge – Technical Summary
 
-One Streamlit web app, two parts, shared Python core. Built in code rather than a no-code tool so that every
-reasoning step is inspectable, testable and measured.
+**Live app:** <https://aiagentchallenge.streamlit.app> (login details supplied separately)
 
-| | Part 1 – RAG over structured docs | Part 2 – Attendee reconciliation agent |
+One Streamlit web app with two parts on a shared Python core. I built it in code rather than a no-code tool so that
+every reasoning step can be inspected, tested and measured.
+
+| | Part 1 – RAG over structured documents | Part 2 – Attendee reconciliation agent |
 |---|---|---|
-| LLM | OpenAI `gpt-5.6` (structured outputs) | OpenAI `gpt-5.6` (Responses API tool calling + reasoning summaries) |
-| Retrieval / tools | Qdrant (dense `text-embedding-3-small` + BM25 sparse, RRF fusion), pandas | Google Calendar, Gmail, HTTP scrape of a public directory, DNS MX lookups |
-| Deterministic core | record-level ingestion, plan validation, aggregation engine, fact verifier | normalisation, de-duplication, reference join, validation rules, evidence checker |
-| UI | chat + "How this answer was produced" trace + KB browser + eval results | live agent trace + cleansed table + review queue + corrections log + provenance + CSV |
-| Tests | 30 offline tests (no API key: fake embedder, in-memory Qdrant, fixture tools) | |
+| **LLM** | OpenAI `gpt-5.6`, structured outputs | OpenAI `gpt-5.6`, Responses API tool calling with reasoning summaries |
+| **Retrieval / tools** | Qdrant hybrid search (dense `text-embedding-3-small` + BM25, RRF fusion), pandas | Google Calendar, Gmail, HTTP scrape of a public directory, DNS MX lookups |
+| **Deterministic core** | Record-level ingestion, plan validation, aggregation engine, fact verifier | Normalisation, de-duplication, reference join, validation rules, evidence checker |
+| **UI** | Chat, per-answer trace, document manager, evaluation results | Live agent trace, cleansed table, review queue, corrections log, provenance, CSV export |
 
-**Design principle used throughout: the LLM proposes, deterministic code verifies.** The model is used where language
-understanding is needed (rewriting queries, reading messy emails, deciding what to investigate). Values, joins, rules
-and acceptance of changes are handled by code that can be unit-tested and that produces the same output for the same
-input.
+## Design principle: the LLM proposes, deterministic code verifies
+
+The model handles the parts that need language understanding: rewriting queries, reading messy emails and deciding
+what to investigate. Code handles values, joins, rules and whether a change is accepted, so those steps are
+unit-tested and give the same output for the same input. Both parts make this split visible in the UI.
 
 ---
 
-## Part 1 – RAG deployment
+## Part 1 – RAG over structured documents
 
-### Knowledge base: uploaded documents
-Users upload their own files in the **Documents** tab: CSV/TSV, Excel (one table per sheet), JSON, PDF, Word (.docx)
-and TXT/Markdown, up to 20 MB each. Each browser session has its own document set and index. Re-indexing after an
-upload only embeds new chunks, because embeddings are cached by content hash. A file that fails to parse is reported
-with its error and does not block the others.
-
-The loaders contain nothing dataset-specific. For each table they infer:
-* the **key column**: the first column with unique, non-empty values, preferring text. It becomes the record ID.
-* the **title column**: a mostly-unique, short text column such as a name. It becomes the row heading.
-* the **filterable columns**: text columns with at most 30 distinct short values. They become payload filters, and
-  their allowed values are listed to the query planner.
-* **readable labels**: `ter_pct` becomes "TER %", and `min_lump_sum_zar` becomes "Minimum lump sum (ZAR)".
-
-For JSON, the main list of records becomes a table, each nested list of objects becomes a child table that cites its
-parent record, and top-level scalars are kept as context on every record. PDF and Word tables become tables, and the
-remaining text becomes paragraphs.
-
-Four **sample documents** for a fictional fund manager are preloaded and go through the same upload path. They can be
-removed or re-added with one click.
-
-#### Sample documents
-| File | Format | Content | Records |
-|---|---|---|---|
-| `funds.csv` | CSV | fund factsheet: TER, minimums, risk rating, Reg 28, 1/3/5y returns (some deliberately *not reported*) | 14 |
-| `fee_schedule.json` | nested JSON | platform products with tiered admin fees, switch rules, contribution limits | 4 products / 10 tiers |
-| `fica_requirements.csv` | CSV | onboarding documents per client type | 6 |
-| `investment_policy.pdf` | **tabular PDF** + prose | suitability matrix, asset-class limits table (spans a page break), breach rules | 13 rows + 2 paragraphs |
+Users upload CSV/TSV, Excel, JSON, PDF, Word or text files and ask questions in chat. Sample documents are preloaded
+through the same upload path. The loaders are generic: they infer each table's key, title and filterable columns, so
+no dataset-specific code is needed.
 
 ### Pipeline
-```
-files -> structure-aware loaders ---------------------------> pandas DataFrames (aggregation engine)
-           | one Document per record, with _source/_record_ref/_chunk_id on both sides
-           v
-        AtomicChunker -> OpenAI embeddings + BM25 -> Qdrant (payload: category, record_ref, metadata.fields.*)
+
+```text
+files -> structure-aware loaders -> one chunk per record ------> pandas tables (aggregation engine)
+                                         |
+                                         v
+                       OpenAI embeddings + BM25 -> Qdrant (with filterable metadata)
 
 question + chat history
-   -> Query planner (LLM, strict schema): standalone rewrite, intent, dataset routing, column filters, sub-queries, aggregation spec
-   -> validate_plan (code): drop unknown datasets/columns/filter values (logged as "planner corrections")
+   -> query planner (LLM, strict schema): standalone rewrite, intent, dataset routing, filters, aggregation spec
+   -> plan validation (code): unknown datasets / columns / filter values are dropped and logged
    -> intent router
-        lookup/catalog : one hybrid search per routed dataset (filters only constrain their own dataset)
-        compare        : one search per sub-query x dataset, merged
-        aggregate      : pandas over the FULL table (min/max/mean/sum/count/list) + the source rows as citations
-        out_of_scope   : polite refusal, no retrieval
-   -> evidence gate: best dense cosine >= 0.30, else retry unrouted, else refuse
-   -> grounded generation (LLM, strict schema): markdown answer with [n] citations + atomic facts {value, passage}
-   -> fact verifier (code): every fact's value must literally/numerically occur in the passage it cites
+        lookup / compare : hybrid search per routed dataset or sub-query
+        aggregate        : pandas over the full table, with the source rows as citations
+        out of scope     : polite refusal, no retrieval
+   -> evidence gate: refuse if the best match is below the relevance threshold
+   -> grounded answer (LLM, strict schema): markdown with [n] citations + a list of atomic facts
+   -> fact verifier (code): each fact must literally or numerically appear in the passage it cites
 ```
 
-**Ingestion, chunking and embedding.** Structured data is chunked **per record**, not by character count. A row split
-across chunks would separate values from their column headers, and a chunk spanning several rows blurs which fund a
-number belongs to. Each row is rendered as readable `Label: value` lines; `ter_pct` becomes "Total expense ratio (TER)
-%" so that it embeds and reads well. Missing cells become an explicit `not reported`. The PDF loader uses `pdfplumber`
-table detection. It stitches a table that continues across a page break without its header row, and groups the
-remaining prose into paragraphs using vertical gaps between lines. Six "dataset overview" chunks answer "what data do
-you have?".
+### Key design decisions
 
-**Query transformation and prompt control.**
-* *Context retention*: the planner rewrites follow-ups into standalone queries ("And its 5-year return?" →
-  "What is the 5-year return of the Kestrel Bond Fund?"; "which of those…" → a filter on the three funds just discussed).
-* *Intent routing*: aggregate questions ("cheapest", "average", "how many") go to pandas, because top-k vector search
-  cannot rank 14 funds by TER unless they all happen to be retrieved.
-* *Metadata pre-filtering*: the catalog lists the allowed values for each filterable column, and anything else the
-  model proposes is dropped and shown in the trace.
-* *Structured answers*: comparisons render as tables. Values are copied exactly. "Not reported" is stated, never
-  estimated.
+* **One chunk per record, not by character count.** Splitting a row separates values from their column headers, and
+  merging rows blurs which record a number belongs to. Each record is rendered as readable `Label: value` lines, and
+  missing values are stated explicitly rather than left blank.
+* **Hybrid retrieval.** Dense embeddings capture meaning, and BM25 catches exact terms and codes that embeddings miss.
+* **Aggregates are calculated, not retrieved.** Questions such as "cheapest", "average" or "how many" go to pandas over
+  the full table. Top-k vector search cannot rank records it never retrieved.
+* **Controlled planning.** The planner only sees allowed filter values. Anything it invents is removed by code and
+  shown in the trace as a "planner correction".
+* **Context retention.** Follow-up questions ("and its 5-year return?") are rewritten into standalone queries before
+  retrieval.
 
-**Relevance, context retention and traceability.** Every answer shows its sources (file + row/table reference).
-An expander shows the plan, the planner corrections, the routes and filters, every retrieved chunk with dense/BM25/RRF
-scores, the deterministic aggregation table, the exact passages sent to the model, a per-fact verification table and
-timings. A badge reports "N/N facts verified against cited source". A second check flags any number stated in the
-answer prose that appears in no passage (nor in the question), which covers numbers the model did not declare as
-facts.
+### Traceability
+
+Every answer lists its sources (file and row or table reference). A "How this answer was produced" panel shows the
+plan, planner corrections, routes and filters, every retrieved chunk with its dense, BM25 and fused scores, any
+aggregation table, the exact passages sent to the model, per-fact verification and timings. A badge reports how many
+facts were verified against their cited source. A second check flags any number in the answer that appears in no
+source passage.
 
 ### Evaluation (20 labelled questions, `python -m part1_rag.evaluate`)
-| Configuration | Recall@5 | MRR | NDCG |
-|---|---:|---:|---:|
-| dense only | 0.85 | 0.80 | 0.81 |
-| hybrid (dense + BM25, RRF) | 0.95 | 0.86 | 0.88 |
-| hybrid + lexical rerank | 0.85 | 0.69 | 0.73 |
-| **shipped: hybrid + query planner/routing** | **1.00** | **1.00** | **1.00** |
 
-The evaluation drove the configuration choices. BM25 helps with codes and exact terms ("Capped SWIX", "TFSA"). The
-pipeline's built-in lexical reranker *hurt* on short records, so it is disabled. Planning and routing contribute the
-largest gain.
+| Configuration | Recall@5 | MRR | NDCG |
+| --- | ---: | ---: | ---: |
+| Dense only | 0.85 | 0.80 | 0.81 |
+| Hybrid (dense + BM25, RRF) | 0.95 | 0.86 | 0.88 |
+| Hybrid + lexical rerank | 0.85 | 0.69 | 0.73 |
+| **Shipped: hybrid + query planner and routing** | **1.00** | **1.00** | **1.00** |
+
+The evaluation drove the configuration. Hybrid search beat dense-only, and the lexical reranker *hurt* on short
+records, so it is turned off. Planning and routing gave the largest gain.
 
 ---
 
-## Part 2 – Agent with tooling, extraction and verification
+## Part 2 – Attendee reconciliation agent
 
-**Task:** "Prepare the verified attendee list for the Q4 Investor Roadshow in Cape Town." The agent reconciles the
-calendar invite with RSVP/registration emails, verifies each person against a public partner directory and DNS, fixes
-what evidence supports, and flags everything else.
+**Task:** prepare a verified attendee list for an upcoming investor event. The agent reconciles the calendar invite
+with RSVP and registration emails, verifies each person against a public partner directory and DNS, corrects what
+the evidence supports and flags everything else for a person to review.
 
-### Tools (all behind interfaces, with a live and an offline implementation)
+### Tools
+
+Every tool sits behind an interface with a live and an offline implementation, so the same agent runs against Google
+or a built-in scenario.
+
 | Tool | Live | Offline |
 |---|---|---|
-| Calendar: `search_calendar_events`, `get_event_attendees` | Google Calendar API | scenario fixture |
-| Email: `search_emails`, `read_email`, `extract_contacts`, draft creation (UI button, never sent) | Gmail API | fixture mailbox with a Gmail-syntax query evaluator |
-| Web: `lookup_directory` (HTTP scrape + BeautifulSoup), `check_email_domain` (DNS MX) | real HTTP + real DNS | same |
-| Workspace: `build_attendee_list`, `apply_correction`, `flag_for_human_review`, `finish` | deterministic engine | same |
-
-Scenario dates are relative to today (the event is about 3 weeks out, the emails arrived in the past week), so the demo never goes stale. The live and offline modes are seeded from **one scenario file** (`google_setup seed` writes the same event and emails
-into a Google account; invites use `sendUpdates=none`, emails are *inserted*, never sent, and firm domains use the
-reserved `.example` TLD).
+| Calendar: search events, get attendees | Google Calendar API | Scenario fixture |
+| Email: search, read, extract contacts, create draft | Gmail API | Fixture mailbox with Gmail-style search |
+| Web: directory lookup (HTTP + BeautifulSoup), email-domain check (DNS MX) | Real HTTP and DNS | Same |
+| Workspace: build list, apply correction, flag for review, finish | Deterministic engine | Same |
 
 ### Orchestration
-```
-LLM (Responses API, reasoning summaries on)           deterministic code
---------------------------------------------           ------------------------------------------------
-plan -> find event -> load attendees  ---------------> exclude organiser / rooms / internal staff
-search mail (several queries) -> extract_contacts ---> LLM extraction -> grounding check (value must occur in email)
-build_attendee_list  --------------------------------> normalise (E.164, names, firms) -> entity resolution
-                                                        -> directory join (email, else name) -> field priority
-                                                        -> RSVP timeline -> validation rules -> issues
+
+```text
+LLM (plans, investigates, decides)                deterministic code (checks and builds)
+----------------------------------                -----------------------------------------------
+find event -> load attendees  ------------------> exclude organiser, rooms, internal staff
+search mail -> extract contacts  ---------------> grounding check: extracted values must occur in the email
+build attendee list  ---------------------------> normalise -> de-duplicate -> join to directory
+                                                  -> resolve conflicts -> validation rules -> issues
 for each issue: investigate (directory / DNS / mail)
-   apply_correction(value, evidence) ----------------> accepted only if value occurs in cited directory row/email;
-                                                        DNS is rejected as evidence for a mailbox
+   apply_correction(value, evidence)  ----------> accepted only if the value appears in the cited source
    or flag_for_human_review(note)
-rebuild -> confirm no new issues -> finish(summary)
+rebuild -> confirm no new issues -> finish
 ```
 
-### Data handling quality
-* **Normalisation**: E.164 phones (handles `+27 (0)83…` and `(021) 555-0198`, and rejects truncated SA numbers that the
-  `phonenumbers` library alone accepts), name casing with particles and apostrophes, firm canonicalisation by fuzzy match
-  to the directory ("Fynbos Wealth" → "Fynbos Wealth Partners").
-* **De-duplication**: by normalised email ("LERATO.MOKOENA@…" from the registration table), then by name plus a
-  compatible domain or company ("J.Botha@KarooCapital…" with no display name ↔ "Johan Botha <johan.botha@…>"). Every
-  merge is logged.
-* **Conflict resolution**: source priority directory > email > calendar for identity fields. For RSVP, the latest
-  explicit statement wins (Ayanda: tentative in the calendar → *declined* by email two days later).
-* **Validation**: domain typo detection (`highveldfo.exmaple`, `gmial.com`) with a DNS confirmation, undeliverable
-  domains, missing phone or company, not on the invite (Kabelo registered by email only), invite sent to a non-verified
-  alias, and identity not in the directory.
-* **Error handling**: tool errors are returned to the model instead of crashing the run. There is a step budget. The
-  directory fetch falls back to a bundled copy and records that it did. Values the extraction invents are rejected and
-  listed.
+### Data quality
 
-### Transparency: how the agent verifies or corrects itself
-* Each reasoning summary, tool call, argument and result is streamed live and kept in a "Full trace" tab.
-* Corrections are **claims with evidence** that code checks. In testing, the agent fixed Priya's typo'd domain from the
-  directory, which was accepted and re-validated. It did *not* rewrite Grace's `gmial.com` address to `gmail.com`, because
-  no source confirms that mailbox; the rules engine would also reject DNS as evidence for it.
-* After a correction the row is re-validated by the same rules. Fixing Priya's email surfaced a *new* warning, "the
-  invite still points to the typo address", which the agent then escalated.
-* Each field in the output carries its provenance (`directory`, `email:msg-003`, `correction C1 (directory)` …).
+* **Normalisation:** phone numbers to international (E.164) format, consistent name casing, and company names matched
+  to their canonical directory form.
+* **De-duplication:** by normalised email, then by name with a compatible domain or company. Every merge is logged.
+* **Conflict resolution:** identity fields follow a fixed source priority (directory > email > calendar). For RSVPs,
+  the latest explicit statement wins.
+* **Validation:** domain typos (confirmed with DNS), undeliverable domains, missing details, people who registered but
+  aren't on the invite, and identities not found in the directory.
+* **Error handling:** tool errors go back to the model instead of crashing the run, runs have a step budget, the
+  directory fetch falls back to a bundled copy (and records that it did), and invented extraction values are rejected.
 
-**Output**: a cleansed table (status ✅ verified / ⚠️ flagged / 👤 human review / ❌ needs fix), CSV export, an issues
-and review queue, a corrections log, a per-attendee provenance view and the excluded records. A Gmail draft can be
-created with one click; it is never sent automatically.
+### How the agent verifies and corrects itself
+
+* **Corrections are claims with evidence.** The agent must cite the directory row or email that supports a change,
+  and code accepts it only if the new value appears in that source. DNS alone is never accepted as proof that a
+  mailbox exists, so the agent can't "fix" an address by guessing.
+* **Re-validation.** A corrected row goes through the same rules again, which can surface new issues for the agent to
+  handle or escalate.
+* **Provenance.** Every output field records where it came from (directory, a specific email, or a numbered
+  correction).
+* **Transparency.** Every reasoning summary, tool call, argument and result streams live and stays in a full-trace
+  tab.
+
+**Output:** a cleansed table (✅ verified / ⚠️ flagged / 👤 human review / ❌ needs fix), CSV export, an issues and
+review queue, a corrections log, per-attendee provenance, the excluded records, and a one-click Gmail draft that is
+never sent automatically.
 
 ---
 
-## Limitations and what I'd do with more time
-* **Scale (Part 1)**: aggregation is limited to one table at a time with equality filters. Next steps would be a
-  constrained text-to-SQL path over DuckDB for joins and range filters (the existing SQL-explainer work fits here), and
-  incremental ingestion with a persistent Qdrant server instead of in-memory.
-* **Reranking**: replace the lexical reranker with a cross-encoder or Voyage rerank and re-run the evaluation. Grow the
-  evaluation set to include end-to-end answer correctness (LLM-as-judge plus exact-value checks).
-* **Agent robustness**: run evaluations of the agent itself (expected final table vs. scenario ground truth across N
-  runs to measure variance), cache extractions, and parallelise extraction calls (about 100k tokens per run today).
-* **Write-back**: with approval, update the calendar invite (add Kabelo, fix Priya's and Johan's addresses) through a
-  human-in-the-loop confirmation step.
-* **Security and ops**: OAuth tokens in a secrets manager, per-user auth on the hosted app, PII redaction in the
-  traces, and structured logs / OpenTelemetry spans per tool call.
-* **Hosted Google mode**: Google OAuth in "Testing" mode issues refresh tokens that expire after 7 days. Live
-  Gmail/Calendar is therefore demoed locally and the hosted app defaults to the offline scenario. Production would use
-  a verified OAuth app or a Workspace service account with domain-wide delegation.
+## Engineering and deployment
+
+* **Tests:** 30 offline tests that need no API key (fake embedder, in-memory Qdrant, fixture tools).
+* **Hosting:** Streamlit Community Cloud, deployed from a private GitHub repository. Secrets (OpenAI key, app login,
+  Google token) live in Streamlit secrets, never in the repo.
+* **Access:** the app is behind a username and password login.
+* **Live Google mode:** the hosted app uses a stored OAuth token and seeds the demo event and emails into the
+  connected account automatically before the first live run, so no manual setup is needed.
+* **Safe by design:** demo calendar invites are created without notifications, demo emails are inserted into the
+  mailbox rather than sent, external companies use reserved `.example` domains, and drafts are never sent
+  automatically.
+
+---
+
+## Limitations and next steps
+
+* **Scale (Part 1):** aggregation works on one table at a time with equality filters. Next would be a constrained
+  text-to-SQL path over DuckDB for joins and ranges, plus a persistent Qdrant server. The current index is in memory,
+  so uploads don't survive an app restart.
+* **Reranking and evaluation:** try a cross-encoder reranker, and extend the evaluation to end-to-end answer
+  correctness (exact-value checks plus LLM-as-judge).
+* **Agent robustness:** evaluate the agent itself (compare its final table with the scenario's expected result over
+  many runs to measure variance), cache extractions and run them in parallel. A run uses about 100k tokens today.
+* **Write-back:** with a person's approval, update the calendar invite with confirmed corrections.
+* **Security and operations:** per-user sign-in, a dedicated secrets manager, PII redaction in traces, and
+  structured logs or OpenTelemetry spans per tool call.
+* **Google OAuth:** an unpublished ("Testing") OAuth app issues tokens that expire after 7 days. Production would use a
+  verified OAuth app or a Workspace service account.

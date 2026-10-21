@@ -5,3 +5,5 @@ __pycache__/
 .streamlit/secrets.toml
 token.json
 .DS_Store
+docs/DEMO_SCRIPT.md
+docs/eval_results.md
