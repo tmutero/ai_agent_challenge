@@ -10,7 +10,7 @@ from common.auth import require_login
 warnings.filterwarnings("ignore", message=".*Payload indexes have no effect.*")
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
-st.set_page_config(page_title="Kestrel AI Agent Challenge", page_icon="🦅", layout="wide")
+st.set_page_config(page_title="Tmutero AI Agent Challenge", page_icon="🦅", layout="wide")
 
 require_login()
 

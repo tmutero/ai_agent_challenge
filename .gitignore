@@ -3,6 +3,5 @@ __pycache__/
 .pytest_cache/
 .env
 .streamlit/secrets.toml
-credentials.json
 token.json
 .DS_Store
