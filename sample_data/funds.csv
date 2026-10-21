@@ -1,0 +1,15 @@
+fund_code,fund_name,asset_class,risk_rating,reg28_compliant,ter_pct,min_lump_sum_zar,min_monthly_zar,inception_date,return_1y_pct,return_3y_pct,return_5y_pct,benchmark,portfolio_manager,distribution_frequency
+KST-MM01,Kestrel Money Market Fund,Money Market,Low,Yes,0.29,1000,250,2009-03-02,8.42,7.31,6.55,STeFI Call Deposit Index,Naledi Khumalo,Monthly
+KST-INC02,Kestrel Income Fund,Multi-Asset Income,Low-Medium,Yes,0.62,5000,500,2011-07-01,10.18,8.94,8.12,STeFI Composite + 1%,Naledi Khumalo,Quarterly
+KST-BND03,Kestrel Bond Fund,SA Bonds,Medium,No,0.55,10000,500,2012-01-16,13.64,9.87,8.71,FTSE/JSE All Bond Index,Pieter van Wyk,Semi-annual
+KST-CON04,Kestrel Conservative Balanced Fund,Multi-Asset Low Equity,Low-Medium,Yes,1.08,10000,500,2010-05-03,11.23,9.05,8.36,CPI + 3%,Thandiwe Mokoena,Semi-annual
+KST-BAL05,Kestrel Balanced Fund,Multi-Asset High Equity,Medium,Yes,1.21,10000,500,2008-09-01,14.87,10.42,9.18,ASISA SA MA High Equity Category Average,Thandiwe Mokoena,Semi-annual
+KST-EQ06,Kestrel SA Equity Fund,SA Equity,High,No,1.37,20000,1000,2007-02-12,17.95,11.86,10.04,FTSE/JSE Capped SWIX,Sipho Dlamini,Annual
+KST-DIV07,Kestrel Dividend Growth Fund,SA Equity,Medium-High,No,1.14,20000,1000,2014-10-01,15.32,12.47,9.63,FTSE/JSE Dividend Plus Index,Sipho Dlamini,Semi-annual
+KST-PRP08,Kestrel Property Fund,SA Real Estate,High,No,0.97,10000,500,2013-04-02,21.06,8.33,3.92,FTSE/JSE SA Listed Property Index,Ayesha Patel,Quarterly
+KST-GEQ09,Kestrel Global Equity Feeder Fund,Global Equity,High,No,1.49,20000,1000,2015-06-01,19.74,13.58,12.21,MSCI All Country World Index (ZAR),James Whitfield,Annual
+KST-GBL10,Kestrel Global Balanced Feeder Fund,Global Multi-Asset,Medium-High,No,1.33,10000,500,2016-03-01,12.96,9.71,8.45,60% MSCI ACWI / 40% Bloomberg Global Aggregate (ZAR),James Whitfield,Annual
+KST-INF11,Kestrel Infrastructure Income Fund,Multi-Asset Income,Medium,Yes,0.88,50000,2000,2021-08-02,11.87,9.94,,CPI + 4%,Ayesha Patel,Quarterly
+KST-ESG12,Kestrel Sustainable Equity Fund,SA Equity,High,No,1.42,20000,1000,2023-02-01,16.48,,,FTSE/JSE Responsible Investment Index,Lindiwe Ndlovu,Annual
+KST-TFS13,Kestrel Tax-Free Balanced Fund,Multi-Asset High Equity,Medium,Yes,0.74,500,250,2017-03-01,14.12,10.09,8.97,CPI + 5%,Thandiwe Mokoena,None (reinvested)
+KST-ABS14,Kestrel Absolute Return Fund,Multi-Asset Flexible,Medium,No,1.56,50000,2000,2019-11-01,12.38,10.77,9.29,CPI + 4% over rolling 3 years,Pieter van Wyk,Semi-annual

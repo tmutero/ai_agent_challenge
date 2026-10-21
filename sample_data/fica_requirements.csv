@@ -1,0 +1,7 @@
+client_type,required_documents,proof_of_address_max_age_months,verification_method,enhanced_due_diligence,review_cycle_months,onboarding_sla_business_days
+Individual - SA resident,Green barcoded ID or smart ID card; proof of address; bank confirmation letter,3,Home Affairs online ID verification,No,36,2
+Individual - foreign national,Valid passport; valid SA visa or permit; proof of address; bank confirmation letter,3,Passport scan + manual compliance review,Yes,12,5
+Minor,Unabridged birth certificate; guardian's ID; guardian's proof of address,3,Home Affairs verification of guardian,No,36,3
+Trust,Letters of authority; trust deed; IDs of all trustees and beneficiaries; resolution authorising investment,3,Master of the High Court record check,Yes,12,7
+Company (Pty) Ltd,CIPC registration certificate; IDs of directors and shareholders above 25%; company resolution; proof of business address,3,CIPC registry check + beneficial ownership review,Yes,12,7
+Politically exposed person (PEP),As per individual type plus source-of-funds declaration and senior management approval,3,Manual compliance review + PEP database screening,Yes,6,10

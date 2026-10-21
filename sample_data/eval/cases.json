@@ -1,0 +1,22 @@
+[
+  {"query": "What is the TER of the Kestrel Bond Fund?", "relevant": ["funds.csv#KST-BND03"]},
+  {"query": "Who manages the global equity feeder fund?", "relevant": ["funds.csv#KST-GEQ09"]},
+  {"query": "minimum monthly debit order for the money market fund", "relevant": ["funds.csv#KST-MM01"]},
+  {"query": "When was the infrastructure income fund launched?", "relevant": ["funds.csv#KST-INF11"]},
+  {"query": "Which fund is benchmarked against the FTSE/JSE Capped SWIX?", "relevant": ["funds.csv#KST-EQ06"]},
+  {"query": "What is the TER of the fund that invests in listed property?", "relevant": ["funds.csv#KST-PRP08"]},
+  {"query": "What documents does a foreign national need to open an account?", "relevant": ["fica_requirements.csv#Individual - foreign national"]},
+  {"query": "How often are politically exposed clients reviewed?", "relevant": ["fica_requirements.csv#Politically exposed person (PEP)"]},
+  {"query": "How long does onboarding take for a private company?", "relevant": ["fica_requirements.csv#Company (Pty) Ltd"]},
+  {"query": "What is the annual contribution limit on a TFSA?", "relevant": ["fee_schedule.json#TFSA"]},
+  {"query": "What drawdown range is allowed on a living annuity?", "relevant": ["fee_schedule.json#LA"]},
+  {"query": "What is the maximum advice fee on a retirement annuity?", "relevant": ["fee_schedule.json#RA"]},
+  {"query": "Maximum equity exposure for a moderately aggressive client", "relevant": ["investment_policy.pdf#t1-Moderately Aggressive"]},
+  {"query": "What is the limit on hedge funds in a retirement portfolio?", "relevant": ["investment_policy.pdf#t2-Hedge funds"]},
+  {"query": "How much of an RA can be in listed property?", "relevant": ["investment_policy.pdf#t2-Listed property"]},
+  {"query": "When must a client's risk profile be re-assessed?", "relevant": ["investment_policy.pdf#p1"]},
+  {"query": "What happens if an adviser recommends a fund riskier than the client's profile allows?", "relevant": ["investment_policy.pdf#p2"]},
+  {"query": "How much gold exposure is allowed?", "relevant": ["investment_policy.pdf#t2-Commodities"]},
+  {"query": "Which fund has the highest 1-year return?", "relevant": ["funds.csv#KST-PRP08"]},
+  {"query": "Which fund has the lowest TER?", "relevant": ["funds.csv#KST-MM01"]}
+]
