@@ -41,6 +41,8 @@ Use a personal or throwaway Google account. Workspace tenants usually block unve
    ```toml
    OPENAI_API_KEY = "sk-..."
    OPENAI_CHAT_MODEL = "gpt-5.6"
+   APP_USERNAME = "admin"
+   APP_PASSWORD = "<choose a strong password>"
    DIRECTORY_URL = "https://<your-app>.streamlit.app/app/static/partner_directory.html"
    ```
 The hosted app runs Part 2 on the offline scenario by default. Live Google mode is demoed locally (see the
