@@ -36,7 +36,16 @@ def _render_step(container, step: Step) -> None:
             st.error(f"{step.name}: {step.payload}")
 
 
+@st.cache_resource(show_spinner="Preparing the demo meeting and emails in Google...", ttl="6h")
+def _ensure_google_demo_data() -> bool:
+    """Seed the live account once per server process (re-checked every 6h), so production needs no CLI step."""
+    from part2_agent.google_setup import ensure_seeded
+    return ensure_seeded(log=lambda _msg: None)
+
+
 def _run(mode: str, goal: str, max_turns: int) -> AgentRun | None:
+    if mode == "google":
+        _ensure_google_demo_data()
     tools = make_toolset(mode)
     status = st.status("Agent running...", expanded=True)
     log = status.container(height=480)
